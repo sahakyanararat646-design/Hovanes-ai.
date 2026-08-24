@@ -3,21 +3,17 @@ from google.genai import types
 from PIL import Image
 import streamlit as st
 
-# Էջի կարգավորումներ
 st.set_page_config(
     page_title="Հովհաննես AI 2.0", page_icon="🤖", layout="wide"
 )
 
-# API Key-ի ստուգում
 api_key = st.secrets.get("GEMINI_API_KEY")
 if not api_key:
     st.error("Խնդրում ենք ավելացնել GEMINI_API_KEY-ը Streamlit Secrets-ում:")
     st.stop()
 
-# Client-ի սկզբնավորում
 client = genai.Client(api_key=api_key)
 
-# Հովհաննեսի բնավորությունը
 system_instruction = (
     "Քո անունը Հովհաննես է: Քեզ ստեղծել է Արարատ Սահակյանը: "
     "Դու ունես շատ հետաքրքիր, հարուստ բնավորություն. դու ընկերասեր ես, ուրախ, "
@@ -29,7 +25,6 @@ system_instruction = (
     "Եթե օգտատերը նկար է ուղարկում, մանրամասն վերլուծիր այն:"
 )
 
-# Ձախ մենյու (Sidebar)
 with st.sidebar:
     st.title("🤖 Հովհաննես AI")
     st.write("Ստեղծող՝ **Արարատ Սահակյան**")
@@ -66,7 +61,21 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # Ցուցակում ներառված են 3.6, 2.5, 2.0 և 1.5 տարբերակները
+        # Հավաքում ենք ամբողջ չատի պատմությունը
+        history_contents = []
+        for msg in st.session_state.messages:
+            role = "user" if msg["role"] == "user" else "model"
+            history_contents.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=msg["content"])]
+                )
+            )
+
+        # Եթե նկար կա, ավելացնում ենք վերջին հաղորդագրության մեջ
+        if image_to_send and len(history_contents) > 0:
+            history_contents[-1].parts.append(image_to_send)
+
         models_to_try = [
             "gemini-3.6-flash",
             "gemini-2.5-flash",
@@ -78,13 +87,9 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
 
         for model_name in models_to_try:
             try:
-                contents = [prompt]
-                if image_to_send:
-                    contents.append(image_to_send)
-
                 response = client.models.generate_content(
                     model=model_name,
-                    contents=contents,
+                    contents=history_contents,
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction
                     ),
