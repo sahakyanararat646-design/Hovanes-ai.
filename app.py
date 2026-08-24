@@ -3,21 +3,17 @@ from google.genai import types
 from PIL import Image
 import streamlit as st
 
-# Էջի կարգավորումներ
 st.set_page_config(
     page_title="Հովհաննես AI 2.0", page_icon="🤖", layout="wide"
 )
 
-# API Key-ի ստուգում
 api_key = st.secrets.get("GEMINI_API_KEY")
 if not api_key:
     st.error("Խնդրում ենք ավելացնել GEMINI_API_KEY-ը Streamlit Secrets-ում:")
     st.stop()
 
-# Client-ի ստեղծում
 client = genai.Client(api_key=api_key)
 
-# Հովհաննեսի բնավորությունը և հրահանգները
 system_instruction = (
     "Քո անունը Հովհաննես է: Քեզ ստեղծել է Արարատ Սահակյանը: "
     "Դու ունես շատ հետաքրքիր, հարուստ բնավորություն. դու ընկերասեր ես, ուրախ, "
@@ -29,28 +25,23 @@ system_instruction = (
     "Եթե օգտատերը նկար է ուղարկում, մանրամասն վերլուծիր այն:"
 )
 
-# Ձախ մենյու (Sidebar)
 with st.sidebar:
     st.title("🤖 Հովհաննես AI")
     st.write("Ստեղծող՝ **Արարատ Սահակյան**")
     st.divider()
 
-    # «Նոր չատ» կոճակ
     if st.button("➕ Նոր չատ (New Chat)", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
     st.divider()
-    # Նկարի բեռնում
     uploaded_file = st.file_uploader("📷 Կցել նկար...", type=["jpg", "jpeg", "png"])
 
-# Զրույցի պատմություն
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 st.title("💬 Չատ Հովհաննեսի հետ")
 
-# Նկարի մշակում
 image_to_send = None
 if uploaded_file:
     image_to_send = Image.open(uploaded_file)
@@ -60,27 +51,25 @@ if uploaded_file:
         use_container_width=True,
     )
 
-# Պատմության արտացոլում
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Հարցի մուտքագրում
 if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # Մոդելների ցանկը՝ հերթով փորձարկելու համար
+        # Ճշգրտված մոդելների անունները
         models_to_try = [
-            "gemini-2.5-flash",
             "gemini-1.5-flash",
-            "gemini-2.0-flash",
+            "gemini-1.5-pro",
+            "gemini-2.0-flash-exp",
         ]
         response_text = None
+        last_error = ""
 
-        # Փորձում ենք մոդելները հերթով
         for model_name in models_to_try:
             try:
                 contents = [prompt]
@@ -95,8 +84,9 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
                     ),
                 )
                 response_text = response.text
-                break  # Եթե աշխատեց, դուրս ենք գալիս ցիկլից
-            except Exception:
+                break
+            except Exception as e:
+                last_error = str(e)
                 continue
 
         if response_text:
@@ -105,4 +95,4 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
                 {"role": "assistant", "content": response_text}
             )
         else:
-            st.error("Չհաջողվեց կապ հաստատել մոդելներից և ոչ մեկի հետ:")
+            st.error(f"Սխալ: {last_error}")
