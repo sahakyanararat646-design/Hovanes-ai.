@@ -3,17 +3,21 @@ from google.genai import types
 from PIL import Image
 import streamlit as st
 
+# Էջի կարգավորումներ
 st.set_page_config(
     page_title="Հովհաննես AI 2.0", page_icon="🤖", layout="wide"
 )
 
+# API Key-ի ստուգում
 api_key = st.secrets.get("GEMINI_API_KEY")
 if not api_key:
     st.error("Խնդրում ենք ավելացնել GEMINI_API_KEY-ը Streamlit Secrets-ում:")
     st.stop()
 
+# Client-ի սկզբնավորում
 client = genai.Client(api_key=api_key)
 
+# Հովհաննեսի բնավորությունը
 system_instruction = (
     "Քո անունը Հովհաննես է: Քեզ ստեղծել է Արարատ Սահակյանը: "
     "Դու ունես շատ հետաքրքիր, հարուստ բնավորություն. դու ընկերասեր ես, ուրախ, "
@@ -25,6 +29,7 @@ system_instruction = (
     "Եթե օգտատերը նկար է ուղարկում, մանրամասն վերլուծիր այն:"
 )
 
+# Ձախ մենյու (Sidebar)
 with st.sidebar:
     st.title("🤖 Հովհաննես AI")
     st.write("Ստեղծող՝ **Արարատ Սահակյան**")
@@ -61,11 +66,12 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # Ճշգրտված մոդելների անունները
+        # Ցուցակում ներառված են 3.6, 2.5, 2.0 և 1.5 տարբերակները
         models_to_try = [
+            "gemini-3.6-flash",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
             "gemini-1.5-flash",
-            "gemini-1.5-pro",
-            "gemini-2.0-flash-exp",
         ]
         response_text = None
         last_error = ""
