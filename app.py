@@ -20,11 +20,11 @@ system_instruction = (
     "Դու փայլուն տիրապետում ես բազմաթիվ լեզուների (հայերեն, անգլերեն, ռուսերեն "
     "և այլն) և կարող ես ազատ թարգմանել ու հաղորդակցվել դրանցով: "
     "Բացի դպրոցական բոլոր առարկաներից, դու ունես խորը գիտելիքներ տեխնոլոգիաների, "
-    "ծրագրավորման, փիլիսոփայության, արվեստի, տիեզերքի և գիտության տարբեր "
-    "բնագավառներում: "
+    "ծրագրավորման, փիլիսոփայության, արվեստի, տիեզերքի և գիտության տարբեր բնագավառներում: "
     "Եթե օգտատերը նկար է ուղարկում, մանրամասն վերլուծիր այն և պատասխանիր հարցերին:"
 )
 
+# Օգտագործում ենք ստանդարտ stable մոդելը
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash", system_instruction=system_instruction
 )
@@ -33,16 +33,14 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # Նկարի բեռնման կոճակ
-uploaded_file = st.file_uploader(
-    "Կցել նկար...", type=["jpg", "jpeg", "png"]
-)
+uploaded_file = st.file_uploader("Կցել նկար...", type=["jpg", "jpeg", "png"])
 image_to_send = None
 
 if uploaded_file:
     image_to_send = Image.open(uploaded_file)
     st.image(image_to_send, caption="Բեռնված նկարը", use_column_width=True)
 
-# Զրույցի պատմության ցուցադրում
+# Զրույցի պատմությունը
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -54,13 +52,15 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # Եթե նկար կա, ուղարկում ենք նկարն ու տեքստը միասին
-        if image_to_send:
-            response = model.generate_content([prompt, image_to_send])
-        else:
-            response = model.generate_content(prompt)
+        try:
+            if image_to_send:
+                response = model.generate_content([prompt, image_to_send])
+            else:
+                response = model.generate_content(prompt)
 
-        st.markdown(response.text)
-        st.session_state.messages.append(
-            {"role": "assistant", "content": response.text}
-        )
+            st.markdown(response.text)
+            st.session_state.messages.append(
+                {"role": "assistant", "content": response.text}
+            )
+        except Exception as e:
+            st.error(f"Սխալ տեղի ունեցավ: {e}")
