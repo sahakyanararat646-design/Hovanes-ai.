@@ -1,5 +1,5 @@
-import google.generativeai as genai
-from PIL import Image
+from google import genai
+from google.genai import types
 import streamlit as st
 
 st.set_page_config(
@@ -11,7 +11,7 @@ if not api_key:
     st.error("Խնդրում ենք ավելացնել GEMINI_API_KEY-ը Streamlit Secrets-ում:")
     st.stop()
 
-genai.configure(api_key=api_key)
+client = genai.Client(api_key=api_key)
 
 system_instruction = (
     "Քո անունը Հովհաննես է: Քեզ ստեղծել է Արարատ Սահակյանը: "
@@ -22,12 +22,6 @@ system_instruction = (
     "սիրով, բարությամբ, ազնվությամբ և ճշմարտությամբ: "
     "Փայլուն տիրապետում ես բազմաթիվ լեզուների (հայերեն, անգլերեն, ռուսերեն): "
     "Եթե օգտատերը նկար է ուղարկում, մանրամասն վերլուծիր այն:"
-)
-
-# Օգտագործում ենք 1.5-flash մոդելը, որն ունի օրական 1,500 անվճար հարցում
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    system_instruction=system_instruction
 )
 
 if "messages" not in st.session_state:
@@ -51,11 +45,15 @@ with st.sidebar:
 
 st.title("💬 Չատ Հովհաննեսի հետ")
 
-image_to_send = None
+image_part = None
 if uploaded_file:
-    image_to_send = Image.open(uploaded_file)
+    image_bytes = uploaded_file.read()
+    image_part = types.Part.from_bytes(
+        data=image_bytes,
+        mime_type=uploaded_file.type,
+    )
     st.image(
-        image_to_send,
+        uploaded_file,
         caption="Բեռնված նկարը",
         use_container_width=True,
     )
@@ -70,15 +68,33 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        inputs = [prompt]
-        if image_to_send:
-            inputs.append(image_to_send)
+        history_contents = []
+        for msg in st.session_state.messages:
+            role = "user" if msg["role"] == "user" else "model"
+            history_contents.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=msg["content"])]
+                )
+            )
+
+        if image_part and len(history_contents) > 0:
+            history_contents[-1].parts.append(image_part)
 
         try:
-            response = model.generate_content(inputs)
+            response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=history_contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction
+                ),
+            )
             response_text = response.text
         except Exception as e:
-            response_text = f"Սխալ: {str(e)}"
+            if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
+                response_text = "⚠️ Այսօրվա անվճար հարցումների լիմիտը սպառվել է։ Խնդրում ենք փորձել ավելի ուշ կամ փոխել API Key-ը:"
+            else:
+                response_text = f"Սխալ: {str(e)}"
 
         st.markdown(response_text)
         st.session_state.messages.append(
