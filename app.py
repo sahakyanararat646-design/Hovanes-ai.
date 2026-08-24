@@ -81,29 +81,18 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
         if image_part and len(history_contents) > 0:
             history_contents[-1].parts.append(image_part)
 
-        # 3.6-ը ավելացված է առաջին տեղում
-        models_to_try = [
-            "gemini-3.6-flash",
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-        ]
-        response_text = None
-        last_error = ""
-
-        for model_name in models_to_try:
-            try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=history_contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_instruction
-                    ),
-                )
-                response_text = response.text
-                break
-            except Exception as e:
-                last_error = str(e)
-                continue
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=history_contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction
+                ),
+            )
+            response_text = response.text
+        except Exception as e:
+            response_text = None
+            last_error = str(e)
 
         if response_text:
             st.markdown(response_text)
