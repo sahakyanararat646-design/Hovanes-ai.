@@ -1,6 +1,5 @@
 from google import genai
 from google.genai import types
-from PIL import Image
 import streamlit as st
 
 st.set_page_config(
@@ -46,11 +45,15 @@ with st.sidebar:
 
 st.title("💬 Չատ Հովհաննեսի հետ")
 
-image_to_send = None
+image_part = None
 if uploaded_file:
-    image_to_send = Image.open(uploaded_file)
+    image_bytes = uploaded_file.read()
+    image_part = types.Part.from_bytes(
+        data=image_bytes,
+        mime_type=uploaded_file.type,
+    )
     st.image(
-        image_to_send,
+        uploaded_file,
         caption="Բեռնված նկարը",
         use_container_width=True,
     )
@@ -75,15 +78,13 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
                 )
             )
 
-        if image_to_send and len(history_contents) > 0:
-            history_contents[-1].parts.append(image_to_send)
+        if image_part and len(history_contents) > 0:
+            history_contents[-1].parts.append(image_part)
 
-        # Բոլոր պահանջված մոդելները
+        # Թողնված են միայն ճիշտ աշխատող մոդելները
         models_to_try = [
-            "gemini-3.6-flash",
             "gemini-2.5-flash",
             "gemini-2.0-flash",
-            "gemini-1.5-flash",
         ]
         response_text = None
         last_error = ""
