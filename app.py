@@ -24,9 +24,9 @@ system_instruction = (
     "Եթե օգտատերը նկար է ուղարկում, մանրամասն վերլուծիր այն:"
 )
 
-# Gemini 2.5 Flash
+# Օգտագործում ենք 1.5-flash մոդելը, որն ունի օրական 1,500 անվճար հարցում
 model = genai.GenerativeModel(
-    model_name="gemini-2.5-flash",
+    model_name="gemini-1.5-flash",
     system_instruction=system_instruction
 )
 
