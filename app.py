@@ -33,7 +33,6 @@ with st.sidebar:
     st.write("Ստեղծող՝ **Արարատ Սահակյան**")
     st.divider()
 
-    # Երկու կոճակն էլ կողք կողքի կամ իրար տակ
     if st.button("➕ Նոր չատ (New Chat)", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
@@ -79,7 +78,9 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
         if image_to_send and len(history_contents) > 0:
             history_contents[-1].parts.append(image_to_send)
 
+        # Բոլոր պահանջված մոդելները
         models_to_try = [
+            "gemini-3.6-flash",
             "gemini-2.5-flash",
             "gemini-2.0-flash",
             "gemini-1.5-flash",
