@@ -25,20 +25,25 @@ system_instruction = (
     "Եթե օգտատերը նկար է ուղարկում, մանրամասն վերլուծիր այն:"
 )
 
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
 with st.sidebar:
     st.title("🤖 Հովհաննես AI")
     st.write("Ստեղծող՝ **Արարատ Սահակյան**")
     st.divider()
 
+    # Երկու կոճակն էլ կողք կողքի կամ իրար տակ
     if st.button("➕ Նոր չատ (New Chat)", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+    if st.button("🗑️ Ջնջել պատմությունը (Clear Chat)", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
     st.divider()
     uploaded_file = st.file_uploader("📷 Կցել նկար...", type=["jpg", "jpeg", "png"])
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 
 st.title("💬 Չատ Հովհաննեսի հետ")
 
@@ -61,7 +66,6 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # Հավաքում ենք ամբողջ չատի պատմությունը
         history_contents = []
         for msg in st.session_state.messages:
             role = "user" if msg["role"] == "user" else "model"
@@ -72,12 +76,10 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
                 )
             )
 
-        # Եթե նկար կա, ավելացնում ենք վերջին հաղորդագրության մեջ
         if image_to_send and len(history_contents) > 0:
             history_contents[-1].parts.append(image_to_send)
 
         models_to_try = [
-            "gemini-3.6-flash",
             "gemini-2.5-flash",
             "gemini-2.0-flash",
             "gemini-1.5-flash",
