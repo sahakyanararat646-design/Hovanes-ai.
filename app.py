@@ -81,8 +81,9 @@ if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
         if image_part and len(history_contents) > 0:
             history_contents[-1].parts.append(image_part)
 
-        # Թողնված են միայն ճիշտ աշխատող մոդելները
+        # 3.6-ը ավելացված է առաջին տեղում
         models_to_try = [
+            "gemini-3.6-flash",
             "gemini-2.5-flash",
             "gemini-2.0-flash",
         ]
