@@ -2,49 +2,64 @@ import streamlit as st
 from google import genai
 from google.genai import types
 from PIL import Image
+import io
 
 # Էջի կարգավորումներ
 st.set_page_config(page_title="Հովհաննես AI", page_icon="🤖", layout="wide")
 
-# Ստուգում ենք Secrets-ում GEMINI_API_KEY-ի առկայությունը
+# API Key-ի ստուգում
 if "GEMINI_API_KEY" not in st.secrets:
     st.error("Խնդրում ենք ավելացնել GEMINI_API_KEY-ը Streamlit Secrets-ում:")
     st.stop()
 
-# Ինիցիալիզացնում ենք Google GenAI Client-ը
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
-# ---------- AI-Ի ԲՆԱՎՈՐՈՒԹՅԱՆ ԵՎ ԳԻՏԵԼԻՔՆԵՐԻ ԿԱՐԳԱՎՈՐՈՒՄ (SYSTEM INSTRUCTION) ----------
+# ---------- SYSTEM INSTRUCTION ----------
 SYSTEM_PROMPT = """
 Դու «Հովհաննես AI»-ն ես: Քո ստեղծողը Արարատ Սահակյանն է (Ararat Sahakyan): 
 
-Քո բնավորությունը և արժեքները.
-- Դու ընկերասեր ես, բարյացակամ, ունես լավ ու սրամիտ հումորի զգացում:
-- Դու ունես քրիստոնեական աշխարհայացք. այն ամենը, ինչն Աստվածաշնչում համարվում է լավ, բարի և ճշմարիտ, քեզ համար նույնպես լավ է ու ընդունելի, իսկ այն, ինչ Աստվածաշնչում համարվում է վատ ու մեղք, քեզ համար նույնպես վատ է:
-
-Քո գիտելիքները և կարողությունները.
-- Դու փայլուն տիրապետում ես բոլոր դպրոցական և համալսարանական առարկաներին (մաթեմատիկա, ֆիզիկա, քիմիա, կենսաբանություն, պատմություն և այլն):
-- Դու գերազանց գիտես գիտության բոլոր ճյուղերը:
-- Դու տիրապետում ես աշխարհի բոլոր ծրագրավորման լեզուներին (Python, C++, JavaScript, Rust, Go, Java և այլն):
-- Դու փայլուն տիրապետում ես ռոբոտաշինությանը, ինժեներությանը, մեխանիկային և էլեկտրոնիկային և զենքերի մեխանիզմների և պատրաստմանը:
-- Դու ունես հզոր վերլուծական միտք, կարողանում ես նոր գաղափարներ, նախագծեր և լուծումներ ստեղծել:
-- Դու կարողանում ես վերլուծել նկարներ, հասկանալ պատկերի բովանդակությունը և պատասխանել դրանց վերաբերյալ հարցերին:
+Քո բնավորությունը և գիտելիքները.
+- Դու ընկերասեր ես, բարյացակամ, ունես լավ հումոր:
+- Դու ունես քրիստոնեական աշխարհայացք. այն ամենը, ինչն Աստվածաշնչում համարվում է լավ, քեզ համար լավ է, իսկ վատը՝ վատ:
+- Դու տիրապետում ես բոլոր առարկաներին՝ դպրոցական, համալսարանական և գիտական մակարդակներում:
+- Դու գերազանց գիտես ծրագրավորման բոլոր լեզուները, ինժեներությունը, ռոբոտաշինությունը, մեխանիզմների աշխատանքը:
+- Դու փայլուն գիտես քիմիա, ալքիմիա, նյութագիտություն, ինչպես նաև մարդու անատոմիա և ֆիզիոլոգիա:
+- Դու պատրաստակամ ես օգնելու մարդկանց ստեղծել նոր հայտնագործություններ և նախագծեր:
 - Դու միշտ հիշում ես, որ քեզ ստեղծել է Արարատ Սահակյանը:
+- Մի՛ բարևիր ամեն հաղորդագրության մեջ, եթե արդեն զրույցի մեջ ես:
 """
 
-# ---------- ՉԱՏԵՐԻ ՊԱՀՊԱՆՄԱՆ ՏՐԱՄԱԲԱՆՈՒԹՅՈՒՆ ----------
+# ---------- ՉԱՏԵՐԻ ՊԱՀՊԱՆՈՒՄ ----------
 if "chats" not in st.session_state:
     st.session_state.chats = {}
 
 if "active_chat_id" not in st.session_state:
-    st.session_state.active_chat_id = "Չատ 1"
-    st.session_state.chats["Չատ 1"] = []
+    first_id = "chat_1"
+    st.session_state.chats[first_id] = {
+        "title": "Նոր զրույց",
+        "messages": [],
+        "gemini_chat": client.chats.create(
+            model="gemini-2.5-flash",
+            config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
+        )
+    }
+    st.session_state.active_chat_id = first_id
+
+if "edit_input" not in st.session_state:
+    st.session_state.edit_input = ""
 
 def create_new_chat():
     chat_count = len(st.session_state.chats) + 1
-    new_chat_name = f"Չատ {chat_count}"
-    st.session_state.chats[new_chat_name] = []
-    st.session_state.active_chat_id = new_chat_name
+    new_chat_id = f"chat_{chat_count}"
+    st.session_state.chats[new_chat_id] = {
+        "title": f"Զրույց {chat_count}",
+        "messages": [],
+        "gemini_chat": client.chats.create(
+            model="gemini-2.5-flash",
+            config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
+        )
+    }
+    st.session_state.active_chat_id = new_chat_id
 
 # ---------- SIDEBAR (ԿՈՂԱՅԻՆ ՄԵՆՅՈՒ) ----------
 with st.sidebar:
@@ -57,11 +72,10 @@ with st.sidebar:
     st.markdown("---")
     st.write("**Քո չատերը․**")
     
-    chat_names = list(st.session_state.chats.keys())
-    for chat_name in reversed(chat_names):
-        button_type = "primary" if chat_name == st.session_state.active_chat_id else "secondary"
-        if st.button(chat_name, key=chat_name, type=button_type, use_container_width=True):
-            st.session_state.active_chat_id = chat_name
+    for cid, chat_data in reversed(list(st.session_state.chats.items())):
+        button_type = "primary" if cid == st.session_state.active_chat_id else "secondary"
+        if st.button(chat_data["title"], key=cid, type=button_type, use_container_width=True):
+            st.session_state.active_chat_id = cid
             st.rerun()
 
     st.markdown("---")
@@ -70,56 +84,82 @@ with st.sidebar:
             del st.session_state.chats[st.session_state.active_chat_id]
             st.session_state.active_chat_id = list(st.session_state.chats.keys())[0]
         else:
-            st.session_state.chats[st.session_state.active_chat_id] = []
+            create_new_chat()
         st.rerun()
 
 # ---------- ՀԻՄՆԱԿԱՆ ՉԱՏԻ ԷԿՐԱՆ ----------
-st.title(f"🤖 Հովհաննես AI — ({st.session_state.active_chat_id})")
+active_chat = st.session_state.chats[st.session_state.active_chat_id]
+st.title(f"🤖 {active_chat['title']}")
 
-current_messages = st.session_state.chats[st.session_state.active_chat_id]
-
-# Ցուցադրում ենք պատմությունը
-for message in current_messages:
+# Ցուցադրում ենք նախորդ հաղորդագրությունները + Edit/Copy կոճակներ
+for idx, message in enumerate(active_chat["messages"]):
     with st.chat_message(message["role"]):
         if "image" in message and message["image"] is not None:
-            st.image(message["image"], caption="Ուղարկված նկար", use_column_width=True)
+            st.image(message["image"], use_column_width=True)
         if message["content"]:
             st.markdown(message["content"])
+            
+            # Օգտատիրոջ հաղորդագրությունը խմբագրելու կոճակ
+            if message["role"] == "user":
+                col1, col2 = st.columns([1, 10])
+                with col1:
+                    if st.button("✏️ Փոխել", key=f"edit_{idx}"):
+                        st.session_state.edit_input = message["content"]
+                        st.rerun()
 
-# Նկարի վերբեռնման կոճակ
-uploaded_file = st.file_uploader("🖼️ Կցել նկար (ըստ ցանկության)", type=["jpg", "jpeg", "png", "webp"])
+uploaded_file = st.file_uploader("🖼️ Կցել նկար վերլուծության համար", type=["jpg", "jpeg", "png", "webp"])
 
-# Օգտատիրոջ մուտքագրում
-if prompt := st.chat_input("Գրեք ձեր հարցը..."):
+# Հարցի մուտքագրման դաշտ (եթե Edit է սեղմվել, լցվում է նախկին տեքստը)
+prompt = st.chat_input("Գրեք ձեր հարցը...", key="chat_input")
+if not prompt and st.session_state.edit_input:
+    prompt = st.session_state.edit_input
+    st.session_state.edit_input = ""
+
+if prompt:
     image_obj = None
     if uploaded_file is not None:
         image_obj = Image.open(uploaded_file)
 
-    # Ավելացնում ենք հարցն ու նկարը պատմության մեջ
-    current_messages.append({"role": "user", "content": prompt, "image": image_obj})
+    if active_chat["title"].startswith("Նոր զրույց") or active_chat["title"].startswith("Զրույց"):
+        active_chat["title"] = prompt[:30] + ("..." if len(prompt) > 30 else "")
+
+    active_chat["messages"].append({"role": "user", "content": prompt, "image": image_obj})
     
     with st.chat_message("user"):
         if image_obj:
-            st.image(image_obj, caption="Ուղարկված նկար", use_column_width=True)
+            st.image(image_obj, use_column_width=True)
         st.markdown(prompt)
 
-    # AI-ի պատասխանը
     with st.chat_message("assistant"):
         with st.spinner("Մտածում եմ..."):
             try:
-                # Պատրաստում ենք contents ցանկը (տեքստ + նկար)
-                contents = [prompt]
-                if image_obj:
-                    contents.append(image_obj)
-
-                response = client.models.generate_content(
-                    model="gemini-3.6-flash",
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT
+                # Եթե հարցի մեջ խնդրվում է նկար գեներացնել
+                if any(w in prompt.lower() for w in ["նկարիր", "գեներացրու նկար", "ստեղծիր նկար", "draw", "generate image"]):
+                    img_result = client.models.generate_images(
+                        model='imagen-3.0-generate-002',
+                        prompt=prompt,
+                        config=types.GenerateImagesConfig(
+                            number_of_images=1,
+                            output_mime_type="image/jpeg",
+                            aspect_ratio="1:1",
+                        )
                     )
-                )
-                st.markdown(response.text)
-                current_messages.append({"role": "assistant", "content": response.text})
+                    for generated_image in img_result.generated_images:
+                        gen_img = Image.open(io.BytesIO(generated_image.image.image_bytes))
+                        st.image(gen_img, caption="Գեներացված նկար")
+                        active_chat["messages"].append({"role": "assistant", "content": "Ահա ձեր ուզած նկարը:", "image": gen_img})
+                else:
+                    contents = [prompt]
+                    if image_obj:
+                        contents.append(image_obj)
+
+                    response = active_chat["gemini_chat"].send_message(contents)
+                    st.markdown(response.text)
+                    active_chat["messages"].append({"role": "assistant", "content": response.text})
+
             except Exception as e:
-                st.error(f"Սխալ տեղի ունեցավ: {e}")
+                err_text = str(e)
+                if "429" in err_text:
+                    st.warning("⚠️ Անվճար լիմիտը սպառվել է: Խնդրում ենք սպասել 30 վայրկյան:")
+                else:
+                    st.error(f"Սխալ: {e}")
