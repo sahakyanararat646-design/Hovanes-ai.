@@ -39,7 +39,7 @@ if "active_chat_id" not in st.session_state:
         "title": "Նոր զրույց",
         "messages": [],
         "gemini_chat": client.chats.create(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
         )
     }
@@ -55,7 +55,7 @@ def create_new_chat():
         "title": f"Զրույց {chat_count}",
         "messages": [],
         "gemini_chat": client.chats.create(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
         )
     }
@@ -91,7 +91,7 @@ with st.sidebar:
 active_chat = st.session_state.chats[st.session_state.active_chat_id]
 st.title(f"🤖 {active_chat['title']}")
 
-# Ցուցադրում ենք նախորդ հաղորդագրությունները + Edit/Copy կոճակներ
+# Ցուցադրում ենք նախորդ հաղորդագրությունները + Edit կոճակ
 for idx, message in enumerate(active_chat["messages"]):
     with st.chat_message(message["role"]):
         if "image" in message and message["image"] is not None:
@@ -99,7 +99,6 @@ for idx, message in enumerate(active_chat["messages"]):
         if message["content"]:
             st.markdown(message["content"])
             
-            # Օգտատիրոջ հաղորդագրությունը խմբագրելու կոճակ
             if message["role"] == "user":
                 col1, col2 = st.columns([1, 10])
                 with col1:
@@ -109,7 +108,6 @@ for idx, message in enumerate(active_chat["messages"]):
 
 uploaded_file = st.file_uploader("🖼️ Կցել նկար վերլուծության համար", type=["jpg", "jpeg", "png", "webp"])
 
-# Հարցի մուտքագրման դաշտ (եթե Edit է սեղմվել, լցվում է նախկին տեքստը)
 prompt = st.chat_input("Գրեք ձեր հարցը...", key="chat_input")
 if not prompt and st.session_state.edit_input:
     prompt = st.session_state.edit_input
