@@ -12,7 +12,11 @@ if "GEMINI_API_KEY" not in st.secrets:
     st.error("Խնդրում ենք ավելացնել GEMINI_API_KEY-ը Streamlit Secrets-ում:")
     st.stop()
 
-client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+# Պահում ենք Client-ը session_state-ում, որպեսզի չփակվի
+if "client" not in st.session_state:
+    st.session_state.client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+
+client = st.session_state.client
 
 # ---------- SYSTEM INSTRUCTION ----------
 SYSTEM_PROMPT = """
@@ -33,15 +37,18 @@ SYSTEM_PROMPT = """
 if "chats" not in st.session_state:
     st.session_state.chats = {}
 
+def get_new_chat_object():
+    return client.chats.create(
+        model="gemini-3.6-flash",
+        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
+    )
+
 if "active_chat_id" not in st.session_state:
     first_id = "chat_1"
     st.session_state.chats[first_id] = {
         "title": "Նոր զրույց",
         "messages": [],
-        "gemini_chat": client.chats.create(
-            model="gemini-3.6-flash",
-            config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
-        )
+        "gemini_chat": get_new_chat_object()
     }
     st.session_state.active_chat_id = first_id
 
@@ -54,10 +61,7 @@ def create_new_chat():
     st.session_state.chats[new_chat_id] = {
         "title": f"Զրույց {chat_count}",
         "messages": [],
-        "gemini_chat": client.chats.create(
-            model="gemini-3.6-flash",
-            config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
-        )
+        "gemini_chat": get_new_chat_object()
     }
     st.session_state.active_chat_id = new_chat_id
 
@@ -159,5 +163,9 @@ if prompt:
                 err_text = str(e)
                 if "429" in err_text:
                     st.warning("⚠️ Անվճար լիմիտը սպառվել է: Խնդրում ենք սպասել 30 վայրկյան:")
+                elif "closed" in err_text:
+                    # Եթե կապը կտրվի, վերաստեղծում ենք չատի օբյեկտը
+                    active_chat["gemini_chat"] = get_new_chat_object()
+                    st.warning("⚠️ Կապը թարմացվեց: Խնդրում ենք կրկին ուղարկել հարցը:")
                 else:
                     st.error(f"Սխալ: {e}")
