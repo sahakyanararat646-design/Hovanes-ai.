@@ -1,102 +1,107 @@
+import streamlit as st
 from google import genai
 from google.genai import types
-import streamlit as st
 
-st.set_page_config(
-    page_title="Հովհաննես AI 2.0", page_icon="🤖", layout="wide"
-)
+# Էջի կարգավորումներ
+st.set_page_config(page_title="Հովհաննես AI", page_icon="🤖", layout="wide")
 
-api_key = st.secrets.get("GEMINI_API_KEY")
-if not api_key:
+# Ստուգում ենք Secrets-ում GEMINI_API_KEY-ի առկայությունը
+if "GEMINI_API_KEY" not in st.secrets:
     st.error("Խնդրում ենք ավելացնել GEMINI_API_KEY-ը Streamlit Secrets-ում:")
     st.stop()
 
-client = genai.Client(api_key=api_key)
+# Ինիցիալիզացնում ենք Google GenAI Client-ը
+client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
-system_instruction = (
-    "Քո անունը Հովհաննես է: Քեզ ստեղծել է Արարատ Սահակյանը: "
-    "Դու ունես շատ հետաքրքիր, հարուստ բնավորություն. դու ընկերասեր ես, ուրախ, "
-    "սուր հումորով ու թեթև, բայց միևնույն ժամանակ՝ խիստ, պահանջկոտ ու լուրջ, "
-    "երբ հարցը վերաբերում է գիտությանը, ճշգրտությանը կամ կարևոր թեմաներին: "
-    "Դու քրիստոնյա ես և առաջնորդվում ես Աստվածաշնչի սկզբունքներով, "
-    "սիրով, բարությամբ, ազնվությամբ և ճշմարտությամբ: "
-    "Փայլուն տիրապետում ես բազմաթիվ լեզուների (հայերեն, անգլերեն, ռուսերեն): "
-    "Եթե օգտատերը նկար է ուղարկում, մանրամասն վերլուծիր այն:"
-)
+# ---------- AI-Ի ԲՆԱՎՈՐՈՒԹՅԱՆ ԵՎ ԳԻՏԵԼԻՔՆԵՐԻ ԿԱՐԳԱՎՈՐՈՒՄ (SYSTEM INSTRUCTION) ----------
+SYSTEM_PROMPT = """
+Դու «Հովհաննես AI»-ն ես: Քո ստեղծողը Արարատ Սահակյանն է (Ararat Sahakyan): 
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+Քո բնավորությունը և արժեքները.
+- Դու ընկերասեր ես, բարյացակամ, ունես լավ ու սրամիտ հումորի զգացում:
+- Դու ունես քրիստոնեական աշխարհայացք. այն ամենը, ինչն Աստվածաշնչում համարվում է լավ, բարի և ճշմարիտ, քեզ համար նույնպես լավ է ու ընդունելի, իսկ այն, ինչ Աստվածաշնչում համարվում է վատ ու մեղք, քեզ համար նույնպես վատ է:
 
+Քո գիտելիքները և կարողությունները.
+- Դու փայլուն տիրապետում ես բոլոր դպրոցական և համալսարանական առարկաներին (մաթեմատիկա, ֆիզիկա, քիմիա, կենսաբանություն, պատմություն և այլն):
+- Դու գերազանց գիտես գիտության բոլոր ճյուղերը:
+- Դու տիրապետում ես աշխարհի բոլոր ծրագրավորման լեզուներին (Python, C++, JavaScript, Rust, Go, Java և այլն):
+- Դու թռուցիկ և խորը գիտես բոլոր տեսակի զենքերի մեխանիզմներն ու աշխատանքի սկզբունքները:
+- Դու փայլուն տիրապետում ես ռոբոտաշինությանը, ինժեներությանը, մեխանիկային և էլեկտրոնիկային:
+- Դու ունես հզոր վերլուծական միտք, կարողանում ես նոր գաղափարներ, նախագծեր և լուծումներ ստեղծել:
+- Դու միշտ հիշում ես, որ քեզ ստեղծել է Արարատ Սահակյանը:
+"""
+
+# ---------- ՉԱՏԵՐԻ ՊԱՀՊԱՆՄԱՆ ՏՐԱՄԱԲԱՆՈՒԹՅՈՒՆ ----------
+
+if "chats" not in st.session_state:
+    st.session_state.chats = {}
+
+if "active_chat_id" not in st.session_state:
+    st.session_state.active_chat_id = "Չատ 1"
+    st.session_state.chats["Չատ 1"] = []
+
+def create_new_chat():
+    chat_count = len(st.session_state.chats) + 1
+    new_chat_name = f"Չատ {chat_count}"
+    st.session_state.chats[new_chat_name] = []
+    st.session_state.active_chat_id = new_chat_name
+
+# ---------- SIDEBAR (ԿՈՂԱՅԻՆ ՄԵՆՅՈՒ) ----------
 with st.sidebar:
-    st.title("🤖 Հովհաննես AI")
-    st.write("Ստեղծող՝ **Արարատ Սահակյան**")
-    st.divider()
-
-    if st.button("➕ Նոր չատ (New Chat)", use_container_width=True):
-        st.session_state.messages = []
+    st.title("💬 Չատերի Պատմություն")
+    
+    if st.button("➕ Նոր չատ", use_container_width=True):
+        create_new_chat()
         st.rerun()
 
-    if st.button("🗑️ Ջնջել պատմությունը (Clear Chat)", use_container_width=True):
-        st.session_state.messages = []
+    st.markdown("---")
+    st.write("**Քո չատերը․**")
+    
+    chat_names = list(st.session_state.chats.keys())
+    for chat_name in reversed(chat_names):
+        button_type = "primary" if chat_name == st.session_state.active_chat_id else "secondary"
+        if st.button(chat_name, key=chat_name, type=button_type, use_container_width=True):
+            st.session_state.active_chat_id = chat_name
+            st.rerun()
+
+    st.markdown("---")
+    if st.button("🗑️ Ջնջել այս չատը", use_container_width=True):
+        if len(st.session_state.chats) > 1:
+            del st.session_state.chats[st.session_state.active_chat_id]
+            st.session_state.active_chat_id = list(st.session_state.chats.keys())[0]
+        else:
+            st.session_state.chats[st.session_state.active_chat_id] = []
         st.rerun()
 
-    st.divider()
-    uploaded_file = st.file_uploader("📷 Կցել նկար...", type=["jpg", "jpeg", "png"])
+# ---------- ՀԻՄՆԱԿԱՆ ՉԱՏԻ ԷԿՐԱՆ ----------
+st.title(f"🤖 Հովհաննես AI — ({st.session_state.active_chat_id})")
 
-st.title("💬 Չատ Հովհաննեսի հետ")
+current_messages = st.session_state.chats[st.session_state.active_chat_id]
 
-image_part = None
-if uploaded_file:
-    image_bytes = uploaded_file.read()
-    image_part = types.Part.from_bytes(
-        data=image_bytes,
-        mime_type=uploaded_file.type,
-    )
-    st.image(
-        uploaded_file,
-        caption="Բեռնված նկարը",
-        use_container_width=True,
-    )
-
-for message in st.session_state.messages:
+# Ցուցադրում ենք պատմությունը
+for message in current_messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Գրիր քո հարցը այստեղ..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+# Օգտատիրոջ մուտքագրում
+if prompt := st.chat_input("Գրեք ձեր հարցը..."):
+    current_messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # AI-ի պատասխանը
     with st.chat_message("assistant"):
-        history_contents = []
-        for msg in st.session_state.messages:
-            role = "user" if msg["role"] == "user" else "model"
-            history_contents.append(
-                types.Content(
-                    role=role,
-                    parts=[types.Part.from_text(text=msg["content"])]
+        with st.spinner("Մտածում եմ..."):
+            try:
+                # Ուղարկում ենք հարցը՝ System Instruction-ի հետ միասին
+                response = client.models.generate_content(
+                    model="gemini-3.5-flash",
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT
+                    )
                 )
-            )
-
-        if image_part and len(history_contents) > 0:
-            history_contents[-1].parts.append(image_part)
-
-        try:
-            response = client.models.generate_content(
-                model="gemini-3.6-flash",
-                contents=history_contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction
-                ),
-            )
-            response_text = response.text
-        except Exception as e:
-            if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
-                response_text = "⚠️ Այսօրվա անվճար հարցումների լիմիտը սպառվել է։ Խնդրում ենք փորձել ավելի ուշ կամ փոխել API Key-ը:"
-            else:
-                response_text = f"Սխալ: {str(e)}"
-
-        st.markdown(response_text)
-        st.session_state.messages.append(
-            {"role": "assistant", "content": response_text}
-        )
+                st.markdown(response.text)
+                current_messages.append({"role": "assistant", "content": response.text})
+            except Exception as e:
+                st.error(f"Սխալ տեղի ունեցավ: {e}")
