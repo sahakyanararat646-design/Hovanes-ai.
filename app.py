@@ -2,7 +2,7 @@ import streamlit as st
 from google import genai
 from google.genai import types
 from PIL import Image
-import io
+import urllib.parse
 import json
 import os
 
@@ -25,7 +25,7 @@ SYSTEM_PROMPT = """
 
 Քո բնավորությունը և գիտելիքները.
 - Դու ընկերասեր ես, բարյացակամ, ունես լավ հումոր:
-- Դու ունես քրիստոնեական աշխարհայացք. այն ամենը, ինչն Աստվածաշնչում համարվում է լավ, քեզ համար լավ է, իսկ վատը՝ վատ:
+- Դու ունես քրիստոնեական աշխարհայացք:
 - Դու տիրապետում ես բոլոր առարկաներին՝ դպրոցական, համալսարանական և գիտական մակարդակներում:
 - Դու գերազանց գիտես ծրագրավորման բոլոր լեզուները, ինժեներությունը, ռոբոտաշինությունը, մեխանիզմների աշխատանքը:
 - Դու փայլուն գիտես քիմիա, ալքիմիա, նյութագիտություն, ինչպես նաև մարդու անատոմիա և ֆիզիոլոգիա:
@@ -34,7 +34,6 @@ SYSTEM_PROMPT = """
 - Մի՛ բարևիր ամեն հաղորդագրության մեջ, եթե արդեն զրույցի մեջ ես:
 """
 
-# ---------- ՉԱՏԵՐԻ ՄՇՏԱԿԱՆ ՊԱՀՊԱՆՈՒՄ JSON ՖԱՅԼՈՒՄ ----------
 HISTORY_FILE = "chat_history.json"
 
 def load_chats():
@@ -52,7 +51,7 @@ def save_chats():
         save_data[cid] = {
             "title": chat["title"],
             "pinned": chat.get("pinned", False),
-            "messages": [{"role": m["role"], "content": m["content"]} for m in chat["messages"]]
+            "messages": [{"role": m["role"], "content": m["content"], "image_url": m.get("image_url")} for m in chat["messages"]]
         }
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(save_data, f, ensure_ascii=False, indent=2)
@@ -107,7 +106,7 @@ def create_new_chat():
     st.session_state.active_chat_id = new_chat_id
     save_chats()
 
-# ---------- SIDEBAR (ԿՈՂԱՅԻՆ ՄԵՆՅՈՒ) ----------
+# ---------- SIDEBAR ----------
 with st.sidebar:
     st.title("💬 Չատեր")
     
@@ -117,7 +116,6 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # Չատերի տեսակավորում՝ ամրացվածները (pinned) առաջինը
     sorted_chat_ids = sorted(
         st.session_state.chats.keys(),
         key=lambda x: st.session_state.chats[x].get("pinned", False),
@@ -127,8 +125,6 @@ with st.sidebar:
     for cid in sorted_chat_ids:
         chat_data = st.session_state.chats[cid]
         col_btn, col_opt = st.columns([5, 1])
-        
-        # Չատի վերնագիրը (ամրացված լինելու դեպքում 📌 նշանով)
         pin_icon = "📌 " if chat_data.get("pinned") else ""
         button_type = "primary" if cid == st.session_state.active_chat_id else "secondary"
         
@@ -137,27 +133,23 @@ with st.sidebar:
                 st.session_state.active_chat_id = cid
                 st.rerun()
                 
-        # ⚙️ Կոճակը յուրաքանչյուր չատի կողքին (Поделиться, Закрепить, Переименовать, Удалить)
         with col_opt:
             with st.popover("⋮"):
-                # 1. Поделиться
                 chat_text = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in chat_data["messages"]])
                 st.download_button(
-                    label="🔗 Поделиться (Ներբեռնել)",
+                    label="🔗 Поделиться",
                     data=chat_text,
                     file_name=f"{chat_data['title']}.txt",
                     mime="text/plain",
                     key=f"share_{cid}"
                 )
                 
-                # 2. Закрепить / Открепить
                 pin_label = "📌 Открепить" if chat_data.get("pinned") else "📌 Закрепить"
                 if st.button(pin_label, key=f"pin_{cid}"):
                     chat_data["pinned"] = not chat_data.get("pinned", False)
                     save_chats()
                     st.rerun()
                 
-                # 3. Переименовать
                 new_title = st.text_input("Նոր անուն", value=chat_data["title"], key=f"rename_in_{cid}")
                 if st.button("✏️ Переименовать", key=f"rename_btn_{cid}"):
                     if new_title.strip():
@@ -165,7 +157,6 @@ with st.sidebar:
                         save_chats()
                         st.rerun()
                         
-                # 4. Удалить
                 if st.button("🗑️ Удалить", key=f"del_{cid}"):
                     if len(st.session_state.chats) > 1:
                         del st.session_state.chats[cid]
@@ -175,22 +166,21 @@ with st.sidebar:
                     save_chats()
                     st.rerun()
 
-# ---------- ՀԻՄՆԱԿԱՆ ՉԱՏԻ ԷԿՐԱՆ ----------
+# ---------- MAIN CHAT ----------
 active_chat = st.session_state.chats[st.session_state.active_chat_id]
 st.title(f"🤖 {active_chat['title']}")
 
-# Ցուցադրում ենք պատմությունը
 for idx, message in enumerate(active_chat["messages"]):
     with st.chat_message(message["role"]):
-        if message.get("image"):
-            st.image(message["image"], use_column_width=True)
+        if message.get("image_url"):
+            st.image(message["image_url"], caption="Գեներացված նկար", use_column_width=True)
             
         if message["content"]:
             st.markdown(message["content"])
             
             if message["role"] == "user":
                 with st.popover("⚙️ Մենյու"):
-                    if st.button("✏️ Изменить (Փոխել)", key=f"edit_{idx}"):
+                    if st.button("✏️ Изменить", key=f"edit_{idx}"):
                         st.session_state.edit_input = message["content"]
                         st.rerun()
                     st.code(message["content"], language=None)
@@ -210,7 +200,7 @@ if prompt:
     if active_chat["title"].startswith("Նոր զրույց") or active_chat["title"].startswith("Զրույց"):
         active_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
 
-    active_chat["messages"].append({"role": "user", "content": prompt, "image": image_obj})
+    active_chat["messages"].append({"role": "user", "content": prompt})
     
     with st.chat_message("user"):
         if image_obj:
@@ -219,29 +209,17 @@ if prompt:
 
     with st.chat_message("assistant"):
         with st.spinner("Մտածում եմ..."):
-            is_image_request = any(w in prompt.lower() for w in ["նկարիր", "գեներացրու նկար", "ստեղծիր նկար", "draw", "generate image"])
-            image_generated = False
+            # Ստուգում ենք՝ արդյոք նկարի հարցում է
+            is_image_request = any(w in prompt.lower() for w in ["նկարիր", "գեներացրու նկար", "ստեղծիր նկար", "draw", "generate image", "նկար սարքի"])
             
             if is_image_request:
-                try:
-                    img_result = client.models.generate_images(
-                        model='imagen-3.0-generate-002',
-                        prompt=prompt,
-                        config=types.GenerateImagesConfig(
-                            number_of_images=1,
-                            output_mime_type="image/jpeg",
-                            aspect_ratio="1:1",
-                        )
-                    )
-                    for generated_image in img_result.generated_images:
-                        gen_img = Image.open(io.BytesIO(generated_image.image.image_bytes))
-                        st.image(gen_img, caption="Գեներացված նկար")
-                        active_chat["messages"].append({"role": "assistant", "content": "Ահա ձեր ուզած նկարը:", "image": gen_img})
-                        image_generated = True
-                except Exception:
-                    st.info("💡 Նկարների API-ն ակտիվացված չէ անվճար հաշվում, պատասխանում եմ տեքստով:")
-
-            if not image_generated:
+                # Պատրաստում ենք Pollinations AI-ի հղումը
+                encoded_prompt = urllib.parse.quote(prompt)
+                image_url = f"https://pollinations.ai/p/{encoded_prompt}?width=1024&height=1024&seed=42&model=flux"
+                
+                st.image(image_url, caption="Ահա ձեր նկարը 🎨")
+                active_chat["messages"].append({"role": "assistant", "content": "Ահա ձեր ուզած նկարը․", "image_url": image_url})
+            else:
                 try:
                     contents = [prompt]
                     if image_obj:
