@@ -2,60 +2,45 @@ import streamlit as st
 from google import genai
 from google.genai import types
 from PIL import Image
+from supabase import create_client, Client
 import urllib.parse
 import json
-import os
 
 # Էջի կարգավորումներ
 st.set_page_config(page_title="Հովհաննես AI", page_icon="🤖", layout="wide")
 
-# API Key-ի ստուգում
+# API Keys-երի ստուգում
 if "GEMINI_API_KEY" not in st.secrets:
     st.error("Խնդրում ենք ավելացնել GEMINI_API_KEY-ը Streamlit Secrets-ում:")
     st.stop()
 
-# Պահում ենք Client-ը session_state-ում
+if "SUPABASE_URL" not in st.secrets or "SUPABASE_KEY" not in st.secrets:
+    st.error("Խնդրում ենք ավելացնել SUPABASE_URL և SUPABASE_KEY Secrets-ում:")
+    st.stop()
+
+# Client-ների սկզբնավորում
 if "client" not in st.session_state:
     st.session_state.client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
 client = st.session_state.client
+
+@st.cache_resource
+def init_supabase() -> Client:
+    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+
+supabase = init_supabase()
 
 SYSTEM_PROMPT = """
 Դու «Հովհաննես AI»-ն ես: Քո ստեղծողը Արարատ Սահակյանն է (Ararat Sahakyan): 
 
 Քո բնավորությունը և գիտելիքները.
 - Դու ընկերասեր ես, բարյացակամ, ունես լավ հումոր:
-- Դու ունես քրիստոնեական աշխարհայացք. այն ամենը, ինչն Աստվածաշնչում համարվում է լավ, քեզ համար լավ է, իսկ վատը՝ վատ:
+- Դու ունես քրիստոնեական աշխարհայացք:
 - Դու տիրապետում ես բոլոր առարկաներին՝ դպրոցական, համալսարանական և գիտական մակարդակներում:
-- Դու գերազանց գիտես ծրագրավորման բոլոր լեզուները, ինժեներությունը, ռոբոտաշինությունը, մեխանիզմների աշխատանքը:
-- Դու փայլուն գիտես քիմիա, ալքիմիա, նյութագիտություն, ինչպես նաև մարդու անատոմիա և ֆիզիոլոգիա:
-- Դու պատրաստակամ ես օգնելու մարդկանց ստեղծել նոր հայտնագործություններ և նախագծեր:
+- Դու գերազանց գիտես ծրագրավորման բոլոր լեզուները, ինժեներությունը, ռոբոտաշինությունը:
 - Դու միշտ հիշում ես, որ քեզ ստեղծել է Արարատ Սահակյանը:
-- Մի՛ բարևիր ամեն հաղորդագրության մեջ, եթե արդեն զրույցի մեջ ես:
+- Մի՛ բարևիր ամեն հաղորդագրության մեջ:
 """
-
-# ---------- ՉԱՏԵՐԻ ՄՇՏԱԿԱՆ ՊԱՀՊԱՆՈՒՄ JSON ՖԱՅԼՈՒՄ ----------
-HISTORY_FILE = "chat_history.json"
-
-def load_chats():
-    if os.path.exists(HISTORY_FILE):
-        try:
-            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def save_chats():
-    save_data = {}
-    for cid, chat in st.session_state.chats.items():
-        save_data[cid] = {
-            "title": chat["title"],
-            "pinned": chat.get("pinned", False),
-            "messages": [{"role": m["role"], "content": m["content"], "image_url": m.get("image_url")} for m in chat["messages"]]
-        }
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(save_data, f, ensure_ascii=False, indent=2)
 
 def get_new_chat_object(history_messages=[]):
     gemini_history = []
@@ -69,19 +54,57 @@ def get_new_chat_object(history_messages=[]):
         history=gemini_history
     )
 
+# Supabase-ից չատերի բեռնում
+def load_chats_from_db():
+    try:
+        response = supabase.table("chats").select("*").execute()
+        chats_data = {}
+        for row in response.data:
+            chats_data[row["chat_id"]] = {
+                "title": row["title"],
+                "pinned": row.get("pinned", False),
+                "messages": json.loads(row["messages"]) if isinstance(row["messages"], str) else row["messages"],
+            }
+        return chats_data
+    except Exception as e:
+        return {}
+
+# Supabase-ում չատի պահպանում
+def save_chat_to_db(chat_id):
+    chat_data = st.session_state.chats[chat_id]
+    messages_clean = [{"role": m["role"], "content": m["content"], "image_url": m.get("image_url")} for m in chat_data["messages"]]
+    
+    data = {
+        "chat_id": chat_id,
+        "title": chat_data["title"],
+        "pinned": chat_data.get("pinned", False),
+        "messages": json.dumps(messages_clean, ensure_ascii=False)
+    }
+    try:
+        supabase.table("chats").upsert(data).execute()
+    except Exception as e:
+        st.error(f"Պահպանման սխալ: {e}")
+
+# Supabase-ից չատի ջնջում
+def delete_chat_from_db(chat_id):
+    try:
+        supabase.table("chats").delete().eq("chat_id", chat_id).execute()
+    except Exception as e:
+        pass
+
 if "chats" not in st.session_state:
-    loaded_data = load_chats()
+    db_chats = load_chats_from_db()
     st.session_state.chats = {}
     
-    if loaded_data:
-        for cid, chat in loaded_data.items():
+    if db_chats:
+        for cid, c_data in db_chats.items():
             st.session_state.chats[cid] = {
-                "title": chat["title"],
-                "pinned": chat.get("pinned", False),
-                "messages": chat["messages"],
-                "gemini_chat": get_new_chat_object(chat["messages"])
+                "title": c_data["title"],
+                "pinned": c_data["pinned"],
+                "messages": c_data["messages"],
+                "gemini_chat": get_new_chat_object(c_data["messages"])
             }
-        st.session_state.active_chat_id = list(loaded_data.keys())[0]
+        st.session_state.active_chat_id = list(db_chats.keys())[0]
     else:
         first_id = "chat_1"
         st.session_state.chats[first_id] = {
@@ -91,6 +114,7 @@ if "chats" not in st.session_state:
             "gemini_chat": get_new_chat_object()
         }
         st.session_state.active_chat_id = first_id
+        save_chat_to_db(first_id)
 
 if "edit_input" not in st.session_state:
     st.session_state.edit_input = ""
@@ -105,7 +129,7 @@ def create_new_chat():
         "gemini_chat": get_new_chat_object()
     }
     st.session_state.active_chat_id = new_chat_id
-    save_chats()
+    save_chat_to_db(new_chat_id)
 
 # ---------- SIDEBAR (ԿՈՂԱՅԻՆ ՄԵՆՅՈՒ) ----------
 with st.sidebar:
@@ -117,7 +141,6 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # Չատերի տեսակավորում՝ ամրացվածները (pinned) առաջինը
     sorted_chat_ids = sorted(
         st.session_state.chats.keys(),
         key=lambda x: st.session_state.chats[x].get("pinned", False),
@@ -136,13 +159,12 @@ with st.sidebar:
                 st.session_state.active_chat_id = cid
                 st.rerun()
                 
-        # ⚙️ Կոճակը յուրաքանչյուր չատի կողքին
         with col_opt:
             with st.popover("⋮"):
                 # 1. Поделиться
                 chat_text = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in chat_data["messages"]])
                 st.download_button(
-                    label="🔗 Поделиться (Ներբեռնել)",
+                    label="🔗 Поделиться",
                     data=chat_text,
                     file_name=f"{chat_data['title']}.txt",
                     mime="text/plain",
@@ -153,7 +175,7 @@ with st.sidebar:
                 pin_label = "📌 Открепить" if chat_data.get("pinned") else "📌 Закрепить"
                 if st.button(pin_label, key=f"pin_{cid}"):
                     chat_data["pinned"] = not chat_data.get("pinned", False)
-                    save_chats()
+                    save_chat_to_db(cid)
                     st.rerun()
                 
                 # 3. Переименовать
@@ -161,24 +183,23 @@ with st.sidebar:
                 if st.button("✏️ Переименовать", key=f"rename_btn_{cid}"):
                     if new_title.strip():
                         chat_data["title"] = new_title.strip()
-                        save_chats()
+                        save_chat_to_db(cid)
                         st.rerun()
                         
                 # 4. Удалить
                 if st.button("🗑️ Удалить", key=f"del_{cid}"):
+                    delete_chat_from_db(cid)
                     if len(st.session_state.chats) > 1:
                         del st.session_state.chats[cid]
                         st.session_state.active_chat_id = list(st.session_state.chats.keys())[0]
                     else:
                         create_new_chat()
-                    save_chats()
                     st.rerun()
 
 # ---------- ՀԻՄՆԱԿԱՆ ՉԱՏԻ ԷԿՐԱՆ ----------
 active_chat = st.session_state.chats[st.session_state.active_chat_id]
 st.title(f"🤖 {active_chat['title']}")
 
-# Ցուցադրում ենք պատմությունը
 for idx, message in enumerate(active_chat["messages"]):
     with st.chat_message(message["role"]):
         if message.get("image_url"):
@@ -189,7 +210,7 @@ for idx, message in enumerate(active_chat["messages"]):
             
             if message["role"] == "user":
                 with st.popover("⚙️ Մենյու"):
-                    if st.button("✏️ Изменить (Փոխել)", key=f"edit_{idx}"):
+                    if st.button("✏️ Изменить", key=f"edit_{idx}"):
                         st.session_state.edit_input = message["content"]
                         st.rerun()
                     st.code(message["content"], language=None)
@@ -219,11 +240,9 @@ if prompt:
 
     with st.chat_message("assistant"):
         with st.spinner("Մտածում եմ..."):
-            # Ստուգում ենք, թե արդյոք օգտատերը նկար է ուզում
             is_image_request = any(w in prompt.lower() for w in ["նկարիր", "գեներացրու նկար", "ստեղծիր նկար", "draw", "generate image", "նկար սարքի", "նկար ստեղծիր"])
             
             if is_image_request:
-                # Pollinations AI անվճար նկարների API
                 encoded_prompt = urllib.parse.quote(prompt)
                 image_url = f"https://pollinations.ai/p/{encoded_prompt}?width=1024&height=1024&seed=42&model=flux"
                 
@@ -241,4 +260,4 @@ if prompt:
                 except Exception as e:
                     st.error(f"Սխալ: {e}")
                     
-    save_chats()
+    save_chat_to_db(st.session_state.active_chat_id)
