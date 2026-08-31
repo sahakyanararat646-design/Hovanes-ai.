@@ -7,10 +7,18 @@ from google.genai import types
 from PIL import Image
 import streamlit as st
 
+# Հովհաննես AI-ի հատուկ լոգոն
+LOGO_URL = "https://pollinations.ai/p/Minimalist%20luxurious%20app%20logo%20icon%20combining%20stylized%20Armenian%20letter%20H%20with%20soaring%20eagle%20wings%20and%20subtle%20Mount%20Ararat%20silhouette%20at%20the%20base%20glowing%20gold%20and%20deep%20navy%20blue%20circuit%20patterns%20vector%20isolated?width=512&height=512&seed=777&model=flux"
+
 # Էջի կարգավորումներ
 st.set_page_config(
-    page_title="Հովհաննես AI", page_icon="🤖", layout="wide"
+    page_title="Հովհաննես AI",
+    page_icon=LOGO_URL,  # Սա է հեռախոսի/բրաուզերի լոգոն
+    layout="wide",
 )
+
+# Կողային մենյուի լոգոն
+st.logo(LOGO_URL)
 
 # Gemini API Key-ի ստուգում
 if "GEMINI_API_KEY" not in st.secrets:
