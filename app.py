@@ -151,7 +151,7 @@ if "chats" not in st.session_state:
           "messages": c_data["messages"],
           "gemini_chat": get_new_chat_object(c_data["messages"]),
       }
-    st.session_state.active_chat_id = list(db_chats.keys())[0].
+    st.session_state.active_chat_id = list(db_chats.keys())[0]
   else:
     create_new_chat()
 
