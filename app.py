@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import time
 import urllib.parse
 from google import genai
 from google.genai import types
@@ -11,7 +12,7 @@ st.set_page_config(
     page_title="Հովհաննես AI", page_icon="🤖", layout="wide"
 )
 
-# Միայն GEMINI_API_KEY-ի ստուգում (Supabase-ը պետք չէ)
+# Gemini API Key-ի ստուգում
 if "GEMINI_API_KEY" not in st.secrets:
   st.error("Խնդրում ենք ավելացնել GEMINI_API_KEY-ը Streamlit Secrets-ում:")
   st.stop()
@@ -22,7 +23,7 @@ if "client" not in st.session_state:
 client = st.session_state.client
 
 
-# ---------- LOCAL SQLITE DATABASE (ԱՌԱՆՑ SUPABASE-Ի) ----------
+# ---------- LOCAL SQLITE DATABASE ----------
 def init_db():
   conn = sqlite3.connect("streamlit_chats.db")
   c = conn.cursor()
@@ -116,11 +117,26 @@ def get_new_chat_object(history_messages=[]):
         )
     )
 
+  # Օգտագործում ենք ամենաարագ և արդիական Gemini Flash մոդելը
   return client.chats.create(
       model="gemini-3.6-flash",
       config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
       history=gemini_history,
   )
+
+
+def create_new_chat():
+  # Եզակի ID-ի գեներացում
+  new_chat_id = f"chat_{int(time.time() * 1000)}"
+  st.session_state.chats[new_chat_id] = {
+      "title": "Նոր զրույց",
+      "pinned": False,
+      "messages": [],
+      "gemini_chat": get_new_chat_object(),
+  }
+  st.session_state.active_chat_id = new_chat_id
+  save_chat_to_db(new_chat_id)
+  return new_chat_id
 
 
 if "chats" not in st.session_state:
@@ -135,34 +151,12 @@ if "chats" not in st.session_state:
           "messages": c_data["messages"],
           "gemini_chat": get_new_chat_object(c_data["messages"]),
       }
-    st.session_state.active_chat_id = list(db_chats.keys())[0]
+    st.session_state.active_chat_id = list(db_chats.keys())[0].
   else:
-    first_id = "chat_1"
-    st.session_state.chats[first_id] = {
-        "title": "Նոր զրույց",
-        "pinned": False,
-        "messages": [],
-        "gemini_chat": get_new_chat_object(),
-    }
-    st.session_state.active_chat_id = first_id
-    save_chat_to_db(first_id)
+    create_new_chat()
 
 if "edit_input" not in st.session_state:
   st.session_state.edit_input = ""
-
-
-def create_new_chat():
-  chat_count = len(st.session_state.chats) + 1
-  new_chat_id = f"chat_{chat_count}"
-  st.session_state.chats[new_chat_id] = {
-      "title": f"Զրույց {chat_count}",
-      "pinned": False,
-      "messages": [],
-      "gemini_chat": get_new_chat_object(),
-  }
-  st.session_state.active_chat_id = new_chat_id
-  save_chat_to_db(new_chat_id)
-
 
 # ---------- SIDEBAR (ԿՈՂԱՅԻՆ ՄԵՆՅՈՒ) ----------
 with st.sidebar:
@@ -277,9 +271,10 @@ if prompt:
   if uploaded_file is not None:
     image_obj = Image.open(uploaded_file)
 
-  if active_chat["title"].startswith("Նոր զրույց") or active_chat[
-      "title"
-  ].startswith("Զրույց"):
+  # Առաջին հարցը գրելիս չատի վերնագիրը ավտոմատ փոխվում է
+  if active_chat["title"] == "Նոր զրույց" or active_chat["title"].startswith(
+      "Զրույց"
+  ):
     active_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
 
   active_chat["messages"].append({"role": "user", "content": prompt})
@@ -331,3 +326,4 @@ if prompt:
           st.error(f"Սխալ: {e}")
 
   save_chat_to_db(st.session_state.active_chat_id)
+  st.rerun()
