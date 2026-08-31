@@ -27,10 +27,23 @@ if "client" not in st.session_state:
 client = st.session_state.client
 
 
+# ՈՒՂՂՎԱԾ՝ Տողադարձերը և ավելորդ բացատները մաքրող Supabase-ի միացում
 @st.cache_resource
 def init_supabase() -> Client:
-  url = st.secrets["SUPABASE_URL"].strip()
-  key = st.secrets["SUPABASE_KEY"].strip()
+  url = (
+      str(st.secrets["SUPABASE_URL"])
+      .replace("\n", "")
+      .replace("\r", "")
+      .replace(" ", "")
+      .strip()
+  )
+  key = (
+      str(st.secrets["SUPABASE_KEY"])
+      .replace("\n", "")
+      .replace("\r", "")
+      .replace(" ", "")
+      .strip()
+  )
   return create_client(url, key)
 
 
@@ -59,8 +72,9 @@ def get_new_chat_object(history_messages=[]):
         )
     )
 
+  # ՈՒՂՂՎԱԾ՝ Փոխված է ճիշտ մոդելի անունով
   return client.chats.create(
-      model="gemini-3.6-flash",
+      model="gemini-2.5-flash",
       config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
       history=gemini_history,
   )
