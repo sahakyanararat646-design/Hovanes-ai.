@@ -74,7 +74,7 @@ def get_new_chat_object(history_messages=[]):
 
   # ՈՒՂՂՎԱԾ՝ Փոխված է ճիշտ մոդելի անունով
   return client.chats.create(
-      model="gemini-2.5-flash",
+      model="gemini-3.6-flash",
       config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
       history=gemini_history,
   )
